@@ -976,6 +976,11 @@ func IsAWSPlatform() bool {
 	return isAWS
 }
 
+// IsSTSCluster returns true if it is running on an STS cluster
+func IsSTSCluster(arn string) bool {
+	return arn != ""
+}
+
 // IsAzurePlatform returns true if this cluster is running on Azure
 func IsAzurePlatform() bool {
 	nodesList := &corev1.NodeList{}
@@ -1052,6 +1057,8 @@ func GetAWSRegion() (string, error) {
 		"us-gov-west-1":  "us-gov-west-1",
 		"us-gov-east-1":  "us-gov-east-1",
 	}
+	//TODO remove this
+	return "ap-south-1", nil
 	nodesList := &corev1.NodeList{}
 	if ok := KubeList(nodesList); !ok || len(nodesList.Items) == 0 {
 		return "", fmt.Errorf("Failed to list kubernetes nodes")

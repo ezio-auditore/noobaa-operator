@@ -1107,6 +1107,11 @@ func (in *NooBaaSpec) DeepCopyInto(out *NooBaaSpec) {
 			(*out)[key] = outVal
 		}
 	}
+	if in.AWSSTSRoleARN != nil {
+		in, out := &in.AWSSTSRoleARN, &out.AWSSTSRoleARN
+		*out = new(string)
+		**out = **in
+	}
 	return
 }
 

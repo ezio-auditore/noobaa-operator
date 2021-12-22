@@ -90,7 +90,7 @@ roleRef:
   name: noobaa.noobaa.io
 `
 
-const Sha256_deploy_crds_noobaa_io_backingstores_crd_yaml = "29e4e3ad73831cc5b1b071b8c3573a34e3a7e7eaac121fd6c0bd493d95bd6d76"
+const Sha256_deploy_crds_noobaa_io_backingstores_crd_yaml = "21d7000fc44c8205f57d01bf5a5489e8822d078230ee749876ea86890947b5b9"
 
 const File_deploy_crds_noobaa_io_backingstores_crd_yaml = `apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -140,6 +140,8 @@ spec:
               awsS3:
                 description: AWSS3Spec specifies a backing store of type aws-s3
                 properties:
+                  awsSTSRoleARN:
+                    type: string
                   region:
                     description: Region is the AWS region
                     type: string
@@ -163,7 +165,6 @@ spec:
                     description: TargetBucket is the name of the target S3 bucket
                     type: string
                 required:
-                - secret
                 - targetBucket
                 type: object
               azureBlob:
@@ -714,7 +715,7 @@ spec:
       status: {}
 `
 
-const Sha256_deploy_crds_noobaa_io_namespacestores_crd_yaml = "75ea24de1ab0e53c7cdebe2e1f55fe7cd0dc28f469920d64a8451d5429967c8f"
+const Sha256_deploy_crds_noobaa_io_namespacestores_crd_yaml = "f7541d48fbef88f3eefaa1b70dbbdfdc45182121b6286e2cca2017f09685d009"
 
 const File_deploy_crds_noobaa_io_namespacestores_crd_yaml = `apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -764,6 +765,8 @@ spec:
               awsS3:
                 description: AWSS3Spec specifies a namespace store of type aws-s3
                 properties:
+                  awsSTSRoleARN:
+                    type: string
                   region:
                     description: Region is the AWS region
                     type: string
@@ -787,7 +790,6 @@ spec:
                     description: TargetBucket is the name of the target S3 bucket
                     type: string
                 required:
-                - secret
                 - targetBucket
                 type: object
               azureBlob:
@@ -1196,7 +1198,7 @@ spec:
       status: {}
 `
 
-const Sha256_deploy_crds_noobaa_io_noobaas_crd_yaml = "a716415c7ed63a0445c8d79c14898e98733a32e133df23c11b1825418195af53"
+const Sha256_deploy_crds_noobaa_io_noobaas_crd_yaml = "6570b5de6d678822c1b7022e54567c0e25cceb0e59159dbc4898f2bc31dcf49c"
 
 const File_deploy_crds_noobaa_io_noobaas_crd_yaml = `apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -2089,6 +2091,8 @@ spec:
                 nullable: true
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
+              awsSTSRoleARN:
+                type: string
               cleanupPolicy:
                 description: CleanupPolicy (optional) Indicates user's policy for
                   deletion
@@ -3529,7 +3533,7 @@ spec:
       noobaa-s3-svc: "true"
 `
 
-const Sha256_deploy_internal_statefulset_core_yaml = "f7bf9089a492b34c463bd92f621c19ba6908c660518b71b90f1db5b2ab3ee055"
+const Sha256_deploy_internal_statefulset_core_yaml = "cf0367a864ba3860eb885ea3c918c8e470b8150329e65bb64aba86a7405f04dd"
 
 const File_deploy_internal_statefulset_core_yaml = `apiVersion: apps/v1
 kind: StatefulSet
@@ -3566,6 +3570,13 @@ spec:
           secret:
             secretName: noobaa-s3-serving-cert
             optional: true
+        - name: oidc-token
+          projected:
+            sources:
+            - serviceAccountToken:
+                path: oidc-token
+                expirationSeconds: 3600
+                audience: api
       containers:
         #----------------#
         # CORE CONTAINER #
@@ -3580,6 +3591,9 @@ spec:
               readOnly: true
             - name: s3-secret
               mountPath: /etc/s3-secret
+              readOnly: true
+            - mountPath: /var/run/secrets/openshift/serviceaccount
+              name: oidc-token
               readOnly: true
           resources:
             requests:
@@ -4644,7 +4658,7 @@ spec:
   sourceNamespace: default
 `
 
-const Sha256_deploy_operator_yaml = "3030f31026433e2737957a3f153739ce3d1a69cf11813d27b4fd95e7452ee3df"
+const Sha256_deploy_operator_yaml = "2870838f688bf1691d85c64dc5e302eb6575996427c7cfdb7143f322ff0dbd18"
 
 const File_deploy_operator_yaml = `apiVersion: apps/v1
 kind: Deployment
@@ -4662,9 +4676,20 @@ spec:
         noobaa-operator: deployment
     spec:
       serviceAccountName: noobaa
+      volumes:
+      - name: oidc-token
+        projected:
+          sources:
+          - serviceAccountToken:
+              path: oidc-token
+              expirationSeconds: 3600
+              audience: api
       containers:
         - name: noobaa-operator
           image: NOOBAA_OPERATOR_IMAGE
+          volumeMounts:
+          - mountPath: /var/run/secrets/openshift/serviceaccount
+            name: oidc-token
           resources:
             limits:
               cpu: "250m"

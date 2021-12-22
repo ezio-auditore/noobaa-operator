@@ -167,7 +167,7 @@ func (r *Reconciler) SetDesiredServiceAccount() error {
 
 // SetDesiredServiceMgmt updates the ServiceMgmt as desired for reconciling
 func (r *Reconciler) SetDesiredServiceMgmt() error {
-	if 	r.NooBaa.Spec.DisableLoadBalancerService {
+	if r.NooBaa.Spec.DisableLoadBalancerService {
 		r.ServiceMgmt.Spec.Type = corev1.ServiceTypeClusterIP
 	} else {
 		// It is here in case disableLoadBalancerService is removed from the crd or changed to false
@@ -180,7 +180,7 @@ func (r *Reconciler) SetDesiredServiceMgmt() error {
 
 // SetDesiredServiceS3 updates the ServiceS3 as desired for reconciling
 func (r *Reconciler) SetDesiredServiceS3() error {
-	if 	r.NooBaa.Spec.DisableLoadBalancerService {
+	if r.NooBaa.Spec.DisableLoadBalancerService {
 		r.ServiceS3.Spec.Type = corev1.ServiceTypeClusterIP
 	} else {
 		// It is here in case disableLoadBalancerService is removed from the crd or changed to false
@@ -509,6 +509,9 @@ func (r *Reconciler) ReconcileBackingStoreCredentials() error {
 	}
 
 	if util.IsAWSPlatform() {
+		if util.IsSTSCluster(*r.NooBaa.Spec.AWSSTSRoleARN) {
+			return r.ReconcileSTSBucketName()
+		}
 		return r.ReconcileAWSCredentials()
 	}
 	if util.IsAzurePlatform() {
@@ -564,6 +567,22 @@ func (r *Reconciler) ReconcileRGWCredentials() error {
 		return err
 	}
 	return nil
+}
+
+// ReconcileSTSBucketName generates the name of the S3 bucket for the backing store
+func (r *Reconciler) ReconcileSTSBucketName() error {
+	if r.NooBaa.Spec.AWSSTSRoleARN != nil {
+		r.Logger.Info("Creating Bucket Name for STS Default Backing store")
+		bucketName := r.generateBackingStoreTargetName()
+		r.DefaultBackingStore.Spec.AWSS3 = &nbv1.AWSS3Spec{
+			TargetBucket:  bucketName,
+			AWSSTSRoleARN: *r.NooBaa.Spec.AWSSTSRoleARN,
+		}
+		r.IsAWSSTSCluster = true
+		return nil
+	}
+	r.Logger.Error("Error detecting AWS STS ARN in Noobaa spec")
+	return fmt.Errorf("AWS STS ARN not found in Noobaa spec in an STS cluster")
 }
 
 // ReconcileAWSCredentials creates a CredentialsRequest resource if cloud credentials operator is available
@@ -1231,7 +1250,7 @@ func (r *Reconciler) findLocalStorageClass() (string, error) {
 	}
 	if len(lsoStorageClassNames) == 0 {
 		return "", fmt.Errorf("Error: found no LSO storage class and no storage class was marked as default")
-	} 
+	}
 	if len(lsoStorageClassNames) > 1 {
 		return "", fmt.Errorf("Error: found more than one LSO storage class and none was marked as default")
 	}

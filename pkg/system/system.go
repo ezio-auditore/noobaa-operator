@@ -60,6 +60,7 @@ func CmdCreate() *cobra.Command {
 	cmd.Flags().String("db-resources", "", "DB resources JSON")
 	cmd.Flags().String("endpoint-resources", "", "Endpoint resources JSON")
 	cmd.Flags().Bool("use-obc-cleanup-policy", false, "Create NooBaa system with obc cleanup policy")
+	cmd.Flags().String("aws-sts-role-arn", "", "Add the Role arn")
 	return cmd
 }
 
@@ -220,6 +221,7 @@ func RunCreate(cmd *cobra.Command, args []string) {
 	dbResourcesJSON, _ := cmd.Flags().GetString("db-resources")
 	endpointResourcesJSON, _ := cmd.Flags().GetString("endpoint-resources")
 	useOBCCleanupPolicy, _ := cmd.Flags().GetBool("use-obc-cleanup-policy")
+	awsSTSRoleARN, _ := cmd.Flags().GetString("aws-sts-role-arn")
 	if useOBCCleanupPolicy {
 		sys.Spec.CleanupPolicy.Confirmation = nbv1.DeleteOBCConfirmation
 	}
@@ -237,6 +239,9 @@ func RunCreate(cmd *cobra.Command, args []string) {
 			}
 		}
 		util.Panic(json.Unmarshal([]byte(endpointResourcesJSON), &sys.Spec.Endpoints.Resources))
+	}
+	if awsSTSRoleARN != "" {
+		sys.Spec.AWSSTSRoleARN = &awsSTSRoleARN
 	}
 
 	err := CheckMongoURL(sys)
@@ -960,12 +965,12 @@ func CheckMongoURL(sys *nbv1.NooBaa) error {
 
 // LoadConfigMapFromFlags loads a config-map with values from the cli flags, if provided.
 func LoadConfigMapFromFlags() {
-	if(options.DebugLevel != "default_level") {
+	if options.DebugLevel != "default_level" {
 		cm := util.KubeObject(bundle.File_deploy_internal_configmap_empty_yaml).(*corev1.ConfigMap)
 		cm.Namespace = options.Namespace
 		cm.Name = "noobaa-config"
 
-		DefaultConfigMapData := map[string]string {
+		DefaultConfigMapData := map[string]string{
 			"NOOBAA_LOG_LEVEL": options.DebugLevel,
 		}
 

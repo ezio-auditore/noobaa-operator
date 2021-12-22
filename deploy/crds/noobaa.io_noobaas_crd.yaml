@@ -889,6 +889,8 @@ spec:
                 nullable: true
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
+              awsSTSRoleARN:
+                type: string
               cleanupPolicy:
                 description: CleanupPolicy (optional) Indicates user's policy for
                   deletion

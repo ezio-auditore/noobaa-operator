@@ -256,33 +256,36 @@ func (r *Reconciler) ReconcilePhases() error {
 
 // LoadBackingStoreSecret loads the secret to the reconciler struct
 func (r *Reconciler) LoadBackingStoreSecret() error {
-	secretRef := GetBackingStoreSecret(r.BackingStore)
-	if secretRef != nil {
-		r.Secret.Name = secretRef.Name
-		r.Secret.Namespace = secretRef.Namespace
-		if r.Secret.Namespace == "" {
-			r.Secret.Namespace = r.BackingStore.Namespace
-		}
-		if r.Secret.Name == "" {
-			if r.BackingStore.Spec.Type != nbv1.StoreTypePVPool {
-				return util.NewPersistentError("EmptySecretName",
-					"BackingStore Secret reference has an empty name")
+	// TODO add isSTSCluster check here to ignore backing store secret check
+	if !util.IsSTSCluster(r.BackingStore.Spec.AWSS3.AWSSTSRoleARN) {
+		secretRef := GetBackingStoreSecret(r.BackingStore)
+		if secretRef != nil {
+			r.Secret.Name = secretRef.Name
+			r.Secret.Namespace = secretRef.Namespace
+			if r.Secret.Namespace == "" {
+				r.Secret.Namespace = r.BackingStore.Namespace
 			}
-			r.Secret.Name = fmt.Sprintf("backing-store-%s-%s", nbv1.StoreTypePVPool, r.BackingStore.Name)
-			r.Secret.Namespace = r.BackingStore.Namespace
-			r.Secret.StringData = map[string]string{}
-			r.Secret.Data = nil
-
-			if !util.KubeCheck(r.Secret) {
-				r.Own(r.Secret)
-				if !util.KubeCreateFailExisting(r.Secret) {
+			if r.Secret.Name == "" {
+				if r.BackingStore.Spec.Type != nbv1.StoreTypePVPool {
 					return util.NewPersistentError("EmptySecretName",
-						fmt.Sprintf("Could not create Secret %q in Namespace %q (conflict)", r.Secret.Name, r.Secret.Namespace))
+						"BackingStore Secret reference has an empty name")
 				}
-			}
+				r.Secret.Name = fmt.Sprintf("backing-store-%s-%s", nbv1.StoreTypePVPool, r.BackingStore.Name)
+				r.Secret.Namespace = r.BackingStore.Namespace
+				r.Secret.StringData = map[string]string{}
+				r.Secret.Data = nil
 
+				if !util.KubeCheck(r.Secret) {
+					r.Own(r.Secret)
+					if !util.KubeCreateFailExisting(r.Secret) {
+						return util.NewPersistentError("EmptySecretName",
+							fmt.Sprintf("Could not create Secret %q in Namespace %q (conflict)", r.Secret.Name, r.Secret.Namespace))
+					}
+				}
+
+			}
+			util.KubeCheck(r.Secret)
 		}
-		util.KubeCheck(r.Secret)
 	}
 	return nil
 }
@@ -657,9 +660,14 @@ func (r *Reconciler) MakeExternalConnectionParams() (*nb.AddExternalConnectionPa
 	switch r.BackingStore.Spec.Type {
 
 	case nbv1.StoreTypeAWSS3:
-		conn.EndpointType = nb.EndpointTypeAws
-		conn.Identity = r.Secret.StringData["AWS_ACCESS_KEY_ID"]
-		conn.Secret = r.Secret.StringData["AWS_SECRET_ACCESS_KEY"]
+		if util.IsSTSCluster(r.BackingStore.Spec.AWSS3.AWSSTSRoleARN) {
+			conn.EndpointType = nb.EndpointTypeAwsSTS
+			conn.AWSSTSARN = r.BackingStore.Spec.AWSS3.AWSSTSRoleARN
+		} else {
+			conn.EndpointType = nb.EndpointTypeAws
+			conn.Identity = r.Secret.StringData["AWS_ACCESS_KEY_ID"]
+			conn.Secret = r.Secret.StringData["AWS_SECRET_ACCESS_KEY"]
+		}
 		awsS3 := r.BackingStore.Spec.AWSS3
 		u := url.URL{
 			Scheme: "https",
@@ -670,6 +678,7 @@ func (r *Reconciler) MakeExternalConnectionParams() (*nb.AddExternalConnectionPa
 		}
 		if awsS3.Region != "" {
 			u.Host = fmt.Sprintf("s3.%s.amazonaws.com", awsS3.Region)
+			conn.Region = awsS3.Region
 		}
 		conn.Endpoint = u.String()
 
@@ -804,10 +813,11 @@ func (r *Reconciler) MakeExternalConnectionParams() (*nb.AddExternalConnectionPa
 		return nil, util.NewPersistentError("InvalidType",
 			fmt.Sprintf("Invalid backing store type %q", r.BackingStore.Spec.Type))
 	}
-
-	if !util.IsStringGraphicOrSpacesCharsOnly(conn.Identity) || !util.IsStringGraphicOrSpacesCharsOnly(conn.Secret) {
-		return nil, util.NewPersistentError("InvalidSecret",
-			fmt.Sprintf("Invalid secret containing non graphic characters (perhaps not base64 encoded?) %q", r.Secret.Name))
+	if !util.IsSTSCluster(r.BackingStore.Spec.AWSS3.AWSSTSRoleARN) {
+		if !util.IsStringGraphicOrSpacesCharsOnly(conn.Identity) || !util.IsStringGraphicOrSpacesCharsOnly(conn.Secret) {
+			return nil, util.NewPersistentError("InvalidSecret",
+				fmt.Sprintf("Invalid secret containing non graphic characters (perhaps not base64 encoded?) %q", r.Secret.Name))
+		}
 	}
 
 	return conn, nil

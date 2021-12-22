@@ -25,6 +25,7 @@ func CmdInstall() *cobra.Command {
 		Args:  cobra.NoArgs,
 	}
 	cmd.Flags().Bool("use-obc-cleanup-policy", false, "Create NooBaa system with obc cleanup policy")
+	cmd.Flags().String("aws-sts-role-arn", "", "Add the Role arn for AWS STS")
 	cmd.AddCommand(
 		CmdYaml(),
 	)
